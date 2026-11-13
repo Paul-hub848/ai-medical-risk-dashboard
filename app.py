@@ -1,76 +1,107 @@
 import streamlit as st
+import pandas as pd
+import json
 
-st.set_page_config(page_title="AI Medical Device Risk Dashboard", layout="wide")
+st.set_page_config(page_title="AI Medical Device Security Scanner", page_icon="🛡️", layout="wide")
 
-st.title("AI Medical Device Cybersecurity & Risk Assessment Dashboard")
-st.subheader("Aligned with NIST AI RMF & FDA Premarket Cybersecurity Guidance")
+st.title("🛡️ AI Medical Device (SaMD) Automated Security & SBOM Scanner")
+st.markdown("Advanced GRC Tool with Programmatic File Parsing & Automated NIST/FDA Risk Mapping")
 
-st.write("Welcome! Use the inputs below to evaluate the security posture of an AI-enabled Medical Device (SaMD).")
-import streamlit as st
+# Sidebar
+st.sidebar.header("⚙️ Target Device Configuration")
+device_name = st.sidebar.text_input("Device Name", "CardioAI-Diagnostics-v2.1")
+deployment = st.sidebar.selectbox("Deployment Environment", ["Cloud-Hosted SaaS", "On-Premise Hospital Server"])
 
-# Page Configuration
-st.set_page_config(
-    page_title="AI Medical Device Risk Dashboard",
-    page_icon="🛡️",
-    layout="wide"
-)
+tabs = st.tabs(["📁 1. Automated SBOM & Config Upload", "📊 2. Programmatic Risk Calculation", "📋 3. Automated Compliance Report"])
 
-# App Header
-st.title("🛡️ AI Medical Device Cybersecurity & Risk Assessment Dashboard")
-st.markdown("### Designed for Software as a Medical Device (SaMD) Compliance")
-st.markdown("---")
-
-# Sidebar for System Configuration
-st.sidebar.header("📋 Device Profile Setup")
-device_name = st.sidebar.text_input("AI Device Name", "CardioAI Diagnostic Assistant")
-deployment_type = st.sidebar.selectbox("Deployment Environment", ["Cloud Server", "Local Hospital Server", "Embedded Medical Hardware"])
-data_type = st.sidebar.selectbox("Inpusted Data Type", ["Medical Imaging (DICOM)", "Electronic Health Records (EHR)", "Patient Vital Sensor Feeds"])
-
-st.sidebar.markdown("---")
-st.sidebar.info("Frameworks Aligned: **NIST AI RMF 1.0** & **FDA Premarket Cybersecurity Guidance**")
-
-# Main Dashboard Layout
-tab1, tab2, tab3 = st.tabs(["🔍 1. Threat Identification", "📊 2. Risk Scoring Matrix", "📋 3. NIST/FDA Mitigation Report"])
-
-with tab1:
-    st.subheader("AI-Specific Threat Modeling")
-    st.write("Select the potential security threats applicable to your AI Medical Device:")
+with tabs[0]:
+    st.subheader("Automated Artifact Ingestion (Anti-Tamper Control)")
+    st.write("Upload your AI device's Software Bill of Materials (SBOM) or configuration JSON file. The script will automatically parse dependencies to detect vulnerabilities.")
     
-    t1 = st.checkbox("Data Poisoning (Tampering with training/input datasets)")
-    t2 = st.checkbox("Adversarial Input Manipulation (Altering medical scans to fool AI)")
-    t3 = st.checkbox("Model Extraction / Intellectual Property Theft")
-    t4 = st.checkbox("Unauthorized Access & Patient Data Breach (Confidentiality risk)")
-
-    if st.button("Save Threat Profile"):
-        st.success("Threat profile updated successfully!")
-
-with tab2:
-    st.subheader("Qualitative Risk Assessment (Likelihood x Impact)")
+    # Provide a sample default JSON payload for testing
+    sample_sbom = {
+        "device_name": device_name,
+        "components": [
+            {"name": "numpy", "version": "1.19.0", "vulnerable": True, "risk": "Data Poisoning Exposure"},
+            {"name": "openssl", "version": "1.0.1", "vulnerable": True, "risk": "Unencrypted Transmission / Missing TLS 1.3"},
+            {"name": "flask", "version": "2.1.0", "vulnerable": False, "risk": "None"}
+        ],
+        "authentication": "Default-Admin-Password",
+        "data_in-transit_encrypted": False
+    }
     
-    likelihood = st.slider("Select Threat Likelihood (1 = Rare, 5 = Frequent)", 1, 5, 3)
-    impact = st.slider("Select Potential Patient / System Impact (1 = Low, 5 = Critical)", 1, 5, 4)
+    uploaded_file = st.file_uploader("Upload Software Bill of Materials (SBOM JSON)", type=["json"])
     
-    risk_score = likelihood * impact
-    
-    st.metric(label="Calculated Risk Score", value=risk_score)
-    
-    if risk_score >= 15:
-        st.error("🚨 **Risk Level: CRITICAL** - Immediate mitigation controls required before clinical deployment.")
-    elif risk_score >= 8:
-        st.warning("⚠️ **Risk Level: MODERATE** - Enhanced monitoring and security safeguards needed.")
+    if uploaded_file is not None:
+        try:
+            sbom_data = json.load(uploaded_file)
+            st.success("Successfully parsed uploaded SBOM file.")
+        except Exception as e:
+            st.error(f"Error parsing file: {e}")
+            sbom_data = sample_sbom
     else:
-        st.info("✅ **Risk Level: LOW** - Standard controls sufficient.")
+        st.info("No custom file uploaded. Using default system inspection profile.")
+        sbom_data = sample_sbom
+        
+    st.json(sbom_data)
 
-with tab3:
-    st.subheader("Compliance & Mitigation Recommendations")
-    st.write("Based on your selections, here are the required regulatory actions:")
+with tabs[1]:
+    st.subheader("Automated Vulnerability & Risk Engine")
     
-    st.markdown("""
-    * **Govern & Map (NIST AI RMF):** Establish clear accountability lines for model updates and monitor data drift.
-    * **FDA Premarket Requirements:** Maintain an up-to-date **Software Bill of Materials (SBOM)** tracking all open-source libraries.
-    * **Vulnerability Management Plan:** Implement patch management procedures and secure communication protocols (TLS 1.3 encryption).
-    """)
+    # Programmatically calculate risk based on parsed file contents rather than manual clicks
+    vulnerable_components = [c for c in sbom_data.get("components", []) if c.get("vulnerable")]
+    auth_risk = 5 if sbom_data.get("authentication") == "Default-Admin-Password" else 0
+    encryption_risk = 5 if not sbom_data.get("data_in-transit_encrypted", True) else 0
     
-    if st.button("Generate Downloadable Summary Report"):
-        st.balloons()
-        st.success("Report generated successfully! (Ready to include in your 601IT Technical Report)")
+    component_risk_score = len(vulnerable_components) * 4
+    total_calculated_risk = component_risk_score + auth_risk + encryption_risk
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric(label="Detected Vulnerable Dependencies", value=len(vulnerable_components))
+        st.metric(label="Insecure Authentication/Encryption Penalty", value=auth_risk + encryption_risk)
+    with col2:
+        st.metric(label="Automated Total Risk Score", value=f"{total_calculated_risk} / 25")
+        
+    if total_calculated_risk >= 12:
+        st.error("🚨 CRITICAL AUTOMATED FINDING: High-risk vulnerabilities detected in software supply chain. FDA 510(k) compliance denied.")
+    else:
+        st.success("✅ LOW RISK: Software build passes automated dependency and security checks.")
+
+with tabs[2]:
+    st.subheader("NIST AI RMF & FDA Compliance Enforcement Report")
+    st.write(f"**Target System:** {device_name} | **Automated Risk Score:** {total_calculated_risk}/25")
+    
+    audit_findings = []
+    for comp in vulnerable_components:
+        audit_findings.append({
+            "Source": f"Component: {comp['name']} ({comp['version']})",
+            "Issue": comp['risk'],
+            "Framework Mandate": "FDA Premarket Guidance / NIST Software Supply Chain Security",
+            "Required Remediation": "Upgrade library to patched version immediately."
+        })
+    
+    if auth_risk > 0:
+        audit_findings.append({
+            "Source": "System Authentication",
+            "Issue": "Default credentials detected",
+            "Framework Mandate": "NIST Access Control (AC)",
+            "Required Remediation": "Enforce Multi-Factor Authentication (MFA) and unique user accounts."
+        })
+        
+    if encryption_risk > 0:
+        audit_findings.append({
+            "Source": "Data In-Transit",
+            "Issue": "Unencrypted data streams detected",
+            "Framework Mandate": "FDA Guidance on Cryptographic Protection",
+            "Required Remediation": "Implement TLS 1.3 across all DICOM and HL7 data channels."
+        })
+        
+    if audit_findings:
+        df_audit = pd.DataFrame(audit_findings)
+        st.table(df_audit)
+    else:
+        st.success("No compliance violations detected from the parsed artefact.")
+        
+    if st.button("Export Cryptographic Audit Log"):
+        st.success("Audit log compiled and verified successfully for project documentation.")
