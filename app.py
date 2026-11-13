@@ -39,7 +39,7 @@ with tab1:
     t1 = st.checkbox("Data Poisoning (Tampering with training/input datasets)")
     t2 = st.checkbox("Adversarial Input Manipulation (Altering medical scans to fool AI)")
     t3 = st.checkbox("Model Extraction / Intellectual Property Theft")
-    t4.checkbox = st.checkbox("Unauthorized Access & Patient Data Breach (Confidentiality risk)")
+    t4 = st.checkbox("Unauthorized Access & Patient Data Breach (Confidentiality risk)")
 
     if st.button("Save Threat Profile"):
         st.success("Threat profile updated successfully!")
