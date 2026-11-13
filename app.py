@@ -1,7 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
 
 # ---------------------------------------------------------
 # PAGE CONFIGURATION
@@ -153,9 +151,6 @@ PRESETS = {
     }
 }
 
-# ---------------------------------------------------------
-# HELPER FUNCTIONS
-# ---------------------------------------------------------
 def get_rating(score):
     if score >= 17:
         return "Critical"
@@ -165,14 +160,6 @@ def get_rating(score):
         return "Medium"
     else:
         return "Low"
-
-def get_color(rating):
-    return {
-        "Critical": "#d9534f",
-        "High": "#f0ad4e",
-        "Medium": "#ffd700",
-        "Low": "#5cb85c"
-    }.get(rating, "#cccccc")
 
 # ---------------------------------------------------------
 # HEADER
@@ -204,12 +191,7 @@ with st.sidebar:
             "Clinical Decision Support System (CDSS)",
             "Connected Infusion / Therapeutic Device"
         ],
-        index=0 if not preset_data else [
-            "AI-Powered Radiology / Diagnostic Imaging",
-            "AI Patient Monitoring System",
-            "Clinical Decision Support System (CDSS)",
-            "Connected Infusion / Therapeutic Device"
-        ].index(preset_data["type"])
+        index=0 if not preset_data else 0
     )
     connectivity = st.selectbox(
         "Network Architecture",
@@ -261,11 +243,9 @@ for r in RISKS_DATA:
     inherent_l = r["Default Likelihood"]
     impact = r["Default Impact"]
 
-    # Adjust likelihood based on connectivity
     if connectivity == "Standalone / Air-Gapped" and r["Risk ID"] in ["R2", "R7", "R10"]:
         inherent_l = max(1, inherent_l - 2)
 
-    # Reduce residual likelihood for each active control mapped to the risk
     active_controls = sum(1 for q in r["Control Questions"] if controls_state[q])
     residual_l = max(1, inherent_l - active_controls)
 
@@ -300,105 +280,24 @@ risk_reduction = round(((avg_inherent - avg_residual) / avg_inherent) * 100, 1)
 
 st.subheader(f"📊 Assessment Overview: {device_name}")
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Critical Risks (Score 17–25)", critical_count, delta_color="inverse")
-col2.metric("High Risks (Score 10–16)", high_count, delta_color="inverse")
-col3.metric("Mean Residual Risk Score", f"{avg_residual} / 25", f"-{round(avg_inherent - avg_residual, 1)} vs Inherent", delta_color="inverse")
-col4.metric("Control Risk Reduction", f"{risk_reduction}%", f"{sum(controls_state.values())}/13 Controls Active")
+col1.metric("Critical Risks", critical_count)
+col2.metric("High Risks", high_count)
+col3.metric("Mean Residual Score", f"{avg_residual} / 25")
+col4.metric("Risk Reduction", f"{risk_reduction}%")
 
 st.divider()
 
 # ---------------------------------------------------------
-# TABS: HEATMAP, RISK REGISTER, MITIGATION ROADMAP
+# TABS: RISK REGISTER & REMEDIATION PLAN
 # ---------------------------------------------------------
-tab1, tab2, tab3 = st.tabs([
-    "🔥 5×5 Risk Heatmap & Visuals",
-    "📋 Dynamic Risk Assessment Matrix",
-    "🛠️ Prioritized Mitigation & Compliance Plan"
+tab1, tab2 = st.tabs([
+    "📋 Risk Assessment Matrix & Register",
+    "🛠️ Prioritized Mitigation Roadmap"
 ])
 
 with tab1:
-    c1, c2 = st.columns([1.1, 1])
-
-    with c1:
-        st.markdown("#### 5×5 Residual Risk Matrix (Likelihood × Impact)")
-        # Build 5x5 grid background
-        z_matrix = [[(l * i) for l in range(1, 6)] for i in range(1, 6)]
-        fig_heat = go.Figure(data=go.Heatmap(
-            z=z_matrix,
-            x=[1, 2, 3, 4, 5],
-            y=[1, 2, 3, 4, 5],
-            colorscale=[
-                [0.0, "#5cb85c"],   # Low
-                [0.2, "#ffd700"],   # Medium
-                [0.5, "#f0ad4e"],   # High
-                [1.0, "#d9534f"]    # Critical
-            ],
-            showscale=False,
-            opacity=0.65
-        ))
-
-        # Plot each Risk ID onto the 5x5 grid with slight jitter so overlapping IDs are readable
-        grouped = df.groupby(["Residual Likelihood", "Impact"])["Risk ID"].apply(lambda x: ", ".join(x)).reset_index()
-        fig_heat.add_trace(go.Scatter(
-            x=grouped["Residual Likelihood"],
-            y=grouped["Impact"],
-            mode="text",
-            text=grouped["Risk ID"],
-            textfont=dict(size=14, color="black", family="Arial Black"),
-            hovertemplate="Likelihood: %{x}<br>Impact: %{y}<br>Risks: %{text}<extra></extra>"
-        ))
-
-        fig_heat.update_layout(
-            xaxis=dict(title="Residual Likelihood (1=Rare → 5=Almost Certain)", tickvals=[1, 2, 3, 4, 5], range=[0.5, 5.5]),
-            yaxis=dict(title="Clinical & Operational Impact (1=Negligible → 5=Severe)", tickvals=[1, 2, 3, 4, 5], range=[0.5, 5.5]),
-            height=450,
-            margin=dict(l=20, r=20, t=20, b=20)
-        )
-        st.plotly_chart(fig_heat, use_container_width=True)
-
-    with c2:
-        st.markdown("#### Inherent vs. Residual Risk Score by Threat")
-        fig_bar = go.Figure()
-        fig_bar.add_trace(go.Bar(
-            y=df["Risk ID"] + ": " + df["Risk Name"],
-            x=df["Inherent Score"],
-            name="Inherent Risk (Uncontrolled)",
-            orientation="h",
-            marker_color="rgba(150, 150, 150, 0.45)"
-        ))
-        fig_bar.add_trace(go.Bar(
-            y=df["Risk ID"] + ": " + df["Risk Name"],
-            x=df["Residual Score"],
-            name="Residual Risk (Current Posture)",
-            orientation="h",
-            marker_color=[get_color(r) for r in df["Risk Rating"]]
-        ))
-        fig_bar.update_layout(
-            barmode="overlay",
-            xaxis=dict(title="Risk Score (Likelihood × Impact)", range=[0, 26]),
-            yaxis=dict(autorange="reversed"),
-            height=450,
-            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-            margin=dict(l=20, r=20, t=40, b=20)
-        )
-        st.plotly_chart(fig_bar, use_container_width=True)
-
-with tab2:
     st.markdown("#### Complete AI Medical Device Risk Register")
-    
-    def highlight_rating(val):
-        color = get_color(val)
-        return f"background-color: {color}; color: black; font-weight: bold;"
-
-    display_cols = [
-        "Risk ID", "Risk Name", "Category", "Inherent Score",
-        "Residual Likelihood", "Impact", "Residual Score", "Risk Rating"
-    ]
-    st.dataframe(
-        df[display_cols].style.map(highlight_rating, subset=["Risk Rating"]),
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(df[["Risk ID", "Risk Name", "Category", "Inherent Score", "Residual Score", "Risk Rating"]], use_container_width=True, hide_index=True)
 
     csv_data = df.to_csv(index=False).encode("utf-8")
     st.download_button(
@@ -408,19 +307,13 @@ with tab2:
         mime="text/csv"
     )
 
-with tab3:
-    st.markdown("#### Actionable Remediation Plan (Sorted by Highest Residual Risk)")
+with tab2:
+    st.markdown("#### Actionable Remediation Plan")
     priority_df = df.sort_values(by="Residual Score", ascending=False)
 
     for _, row in priority_df.iterrows():
-        if row["Risk Rating"] in ["Critical", "High"]:
-            badge = "🔴 CRITICAL" if row["Risk Rating"] == "Critical" else "🟠 HIGH"
-            with st.expander(f"{badge} | {row['Risk ID']}: {row['Risk Name']} (Score: {row['Residual Score']}/25)", expanded=True):
-                st.write(f"**Mapped Mitigation:** {row['Mitigation Strategy']}")
-                st.write(f"**Required Technical Controls:** {row['Recommended Controls']}")
-                st.caption(f"**Regulatory / Standards Alignment:** {row['Regulatory Alignment']}")
-        else:
-            with st.expander(f"🟡/🟢 {row['Risk Rating'].upper()} | {row['Risk ID']}: {row['Risk Name']} (Score: {row['Residual Score']}/25)", expanded=False):
-                st.write(f"**Mapped Mitigation:** {row['Mitigation Strategy']}")
-                st.write(f"**Maintained Controls:** {row['Recommended Controls']}")
-                st.caption(f"**Regulatory / Standards Alignment:** {row['Regulatory Alignment']}")
+        badge = "🔴 CRITICAL" if row["Risk Rating"] == "Critical" else ("🟠 HIGH" if row["Risk Rating"] == "High" else "🟡/🟢")
+        with st.expander(f"{badge} | {row['Risk ID']}: {row['Risk Name']} (Score: {row['Residual Score']}/25)"):
+            st.write(f"**Mapped Mitigation:** {row['Mitigation Strategy']}")
+            st.write(f"**Required Technical Controls:** {row['Recommended Controls']}")
+            st.caption(f"**Regulatory Alignment:** {row['Regulatory Alignment']}")
